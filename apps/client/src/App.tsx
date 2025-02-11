@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import CameraAccessDemo from "./pages/CameraAccessDemo";
 import LiveVideoDemo from "./pages/LiveVideoDemo";
 import Sidebar from "./components/Sidebar";
+import WebRTCDemo from "./pages/WebRTCDemo";
 
 function App() {
   return (
@@ -13,6 +14,7 @@ function App() {
           <Routes>
             <Route path="/camera-access" element={<CameraAccessDemo />} />
             <Route path="/live-video" element={<LiveVideoDemo />} />
+            <Route path="/web-rtc-video" element={<WebRTCDemo />} />
             <Route
               path="/"
               element={
