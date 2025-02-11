@@ -2,12 +2,11 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import CameraAccessDemo from "./pages/CameraAccessDemo";
 import LiveVideoDemo from "./pages/LiveVideoDemo";
 import Sidebar from "./components/Sidebar";
-import "./App.css";
 
 function App() {
   return (
     <Router>
-      <div className="flex h-screen">
+      <div className="flex h-screen w-screen">
         <Sidebar />
         {/* Main Content */}
         <div className="flex-1 overflow-auto">
