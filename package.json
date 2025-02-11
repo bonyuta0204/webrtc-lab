@@ -1,0 +1,11 @@
+{
+  "name": "webrtc-lab",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "pnpm --filter client dev & pnpm --filter server dev"
+  }
+}
