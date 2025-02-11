@@ -3,6 +3,7 @@ import CameraAccessDemo from "./pages/CameraAccessDemo";
 import LiveVideoDemo from "./pages/LiveVideoDemo";
 import Sidebar from "./components/Sidebar";
 import WebRTCDemo from "./pages/WebRTCDemo";
+import WebRTCDemo2 from "./pages/WebRTCDemo2";
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
             <Route path="/camera-access" element={<CameraAccessDemo />} />
             <Route path="/live-video" element={<LiveVideoDemo />} />
             <Route path="/web-rtc-video" element={<WebRTCDemo />} />
+            <Route path="/web-rtc-video-2" element={<WebRTCDemo2 />} />
             <Route
               path="/"
               element={

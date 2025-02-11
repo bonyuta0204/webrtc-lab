@@ -8,6 +8,7 @@ const sidebarItems: SidebarItem[] = [
   { label: "Camera Access Demo", path: "/camera-access" },
   { label: "Live Video Demo", path: "/live-video" },
   { label: "WebRTC Demo", path: "/web-rtc-video" },
+  { label: "WebRTC Demo 2", path: "/web-rtc-video-2" },
 ];
 
 export function Sidebar() {
