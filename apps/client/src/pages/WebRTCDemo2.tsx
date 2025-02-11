@@ -1,129 +1,202 @@
 import { useRef, useState } from "react";
+import { WebSocketClient } from "../lib/websocket";
 
 const WebRTCDemo2 = () => {
-  const [localPeerConnection, setLocalPeerConnection] = useState<RTCPeerConnection | null>(null);
-  const [remotePeerConnection, setRemotePeerConnection] = useState<RTCPeerConnection | null>(null);
+  const localPeerConnection = useRef<RTCPeerConnection | null>(null);
+  const remotePeerConnection = useRef<RTCPeerConnection | null>(null);
   const [localCandidates, setLocalCandidates] = useState<RTCIceCandidate[]>([]);
-  const [remoteCandidates, setRemoteCandidates] = useState<RTCIceCandidate[]>([]);
+  const [remoteCandidates, setRemoteCandidates] = useState<RTCIceCandidate[]>(
+    []
+  );
+  const wsClient = useRef<WebSocketClient | null>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
 
-  async function startCasting() {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: false,
-      });
-      console.log("[MEDIA] Successfully accessed user media stream");
-
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = stream;
-      }
-
-      const configuration: RTCConfiguration = {
-        iceServers: [
-          {
-            urls: [
-              "stun:stun.l.google.com:19302",
-              "stun:stun1.l.google.com:19302",
-              "stun:stun2.l.google.com:19302",
-              "stun:stun3.l.google.com:19302",
-              "stun:stun4.l.google.com:19302",
-            ],
-          },
+  const RTCConfiguration: RTCConfiguration = {
+    iceServers: [
+      {
+        urls: [
+          "stun:stun.l.google.com:19302",
+          "stun:stun1.l.google.com:19302",
+          "stun:stun2.l.google.com:19302",
+          "stun:stun3.l.google.com:19302",
+          "stun:stun4.l.google.com:19302",
         ],
-      };
+      },
+    ],
+  };
 
-      const localPC = new RTCPeerConnection(configuration);
-      const remotePC = new RTCPeerConnection(configuration);
+  async function setupMediaStream() {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: true,
+      audio: false,
+    });
+    console.log("[MEDIA] Successfully accessed user media stream");
 
-      setLocalPeerConnection(localPC);
-      setRemotePeerConnection(remotePC);
-
-      console.log("[LOCAL] Created new RTCPeerConnection");
-      console.log("[REMOTE] Created new RTCPeerConnection");
-
-      localPC.addEventListener("icecandidate", (event) => {
-        console.log("[LOCAL] ICE candidate", event.candidate);
-        if (event.candidate) {
-          setLocalCandidates((prev) => [...prev, event.candidate!]);
-        }
-        onIceCandidate(remotePC, event);
-      });
-
-      localPC.addEventListener("signalingstatechange", () => {
-        console.log(
-          "[LOCAL] Signaling state changed:",
-          localPC.signalingState
-        );
-        console.log("[LOCAL] Connection state:", localPC.connectionState);
-      });
-
-      localPC.addEventListener("connectionstatechange", () => {
-        console.log(
-          "[LOCAL] Connection state changed:",
-          localPC.connectionState
-        );
-      });
-
-      remotePC.addEventListener("icecandidate", (event) => {
-        console.log("[REMOTE] ICE candidate", event.candidate);
-        if (event.candidate) {
-          setRemoteCandidates((prev) => [...prev, event.candidate!]);
-        }
-        onIceCandidate(localPC, event);
-      });
-
-      remotePC.addEventListener("signalingstatechange", () => {
-        console.log(
-          "[REMOTE] Signaling state changed:",
-          remotePC.signalingState
-        );
-        console.log("[REMOTE] Connection state:", remotePC.connectionState);
-      });
-
-      remotePC.addEventListener("connectionstatechange", () => {
-        console.log(
-          "[REMOTE] Connection state changed:",
-          remotePC.connectionState
-        );
-      });
-
-      remotePC.addEventListener("track", (event) => {
-        console.log("[REMOTE] Received remote track", {
-          kind: event.track.kind,
-          id: event.track.id,
-          label: event.track.label,
-        });
-        if (remoteVideoRef.current) {
-          remoteVideoRef.current.srcObject = event.streams[0];
-        }
-      });
-
-      stream.getTracks().forEach((track) => {
-        localPC.addTrack(track, stream);
-      });
-
-      const offer = await localPC.createOffer();
-      await localPC.setLocalDescription(offer);
-      await remotePC.setRemoteDescription(offer);
-
-      const answer = await remotePC.createAnswer();
-      await remotePC.setLocalDescription(answer);
-      await localPC.setRemoteDescription(answer);
-    } catch (error) {
-      console.error("Error accessing media devices:", error);
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = stream;
     }
+    return stream;
   }
 
-  function onIceCandidate(
-    pc: RTCPeerConnection,
-    event: RTCPeerConnectionIceEvent
+  async function setupWebSocket() {
+    const ws = new WebSocketClient("ws://localhost:3000");
+
+    await ws.connect();
+    console.log("Connected to the signaling server");
+    wsClient.current = ws;
+  }
+
+  async function setupLocalPeerConnection(
+    stream: MediaStream,
+    ws: WebSocketClient
   ) {
-    if (event.candidate) {
-      pc.addIceCandidate(event.candidate).catch((e) =>
-        console.error("Error adding ICE candidate:", e)
+    const localPC = new RTCPeerConnection(RTCConfiguration);
+    localPeerConnection.current = localPC;
+    console.log("[LOCAL] Created new RTCPeerConnection");
+
+    localPC.addEventListener("icecandidate", (event) => {
+      console.log("[LOCAL] ICE candidate", event.candidate);
+      if (event.candidate) {
+        ws.send(
+          JSON.stringify({
+            type: "candidate",
+            payload: event.candidate,
+            target: "remote",
+          })
+        );
+      }
+    });
+
+    localPC.addEventListener("signalingstatechange", () => {
+      console.log("[LOCAL] Signaling state changed:", localPC.signalingState);
+      console.log("[LOCAL] Connection state:", localPC.connectionState);
+    });
+
+    localPC.addEventListener("connectionstatechange", () => {
+      console.log("[LOCAL] Connection state changed:", localPC.connectionState);
+    });
+
+    stream.getTracks().forEach((track) => {
+      localPC.addTrack(track, stream);
+    });
+
+    const offer = await localPC.createOffer();
+    await localPC.setLocalDescription(offer);
+    ws.send(JSON.stringify({ type: "offer", payload: offer }));
+
+    return localPC;
+  }
+
+  function setupRemotePeerConnection(ws: WebSocketClient) {
+    const remotePC = new RTCPeerConnection(RTCConfiguration);
+    remotePeerConnection.current = remotePC;
+    console.log("[REMOTE] Created new RTCPeerConnection");
+
+    remotePC.addEventListener("icecandidate", (event) => {
+      console.log("[REMOTE] ICE candidate", event.candidate);
+      if (event.candidate) {
+        ws.send(
+          JSON.stringify({
+            type: "candidate",
+            payload: event.candidate,
+            target: "local",
+          })
+        );
+      }
+    });
+
+    remotePC.addEventListener("signalingstatechange", () => {
+      console.log("[REMOTE] Signaling state changed:", remotePC.signalingState);
+      console.log("[REMOTE] Connection state:", remotePC.connectionState);
+    });
+
+    remotePC.addEventListener("connectionstatechange", () => {
+      console.log(
+        "[REMOTE] Connection state changed:",
+        remotePC.connectionState
       );
+    });
+
+    remotePC.addEventListener("track", (event) => {
+      console.log("[REMOTE] Received remote track", {
+        kind: event.track.kind,
+        id: event.track.id,
+        label: event.track.label,
+      });
+      if (remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = event.streams[0];
+      }
+    });
+
+    // Set up message handler for WebSocket
+
+    return remotePC;
+  }
+
+  async function handleOffer(offer: RTCSessionDescriptionInit) {
+    console.log("[REMOTE] Received offer", offer);
+    console.log("[REMOTE] remotePeerConnection", remotePeerConnection);
+    remotePeerConnection.current?.setRemoteDescription(offer);
+    const answer = await remotePeerConnection.current?.createAnswer();
+    remotePeerConnection.current?.setLocalDescription(answer);
+    console.log("[REMOTE] Sending answer", answer);
+    wsClient.current?.send(JSON.stringify({ type: "answer", payload: answer }));
+  }
+
+  function handleAnswer(answer: RTCSessionDescriptionInit) {
+    console.log("[LOCAL] Received answer", answer);
+    localPeerConnection.current?.setRemoteDescription(answer);
+  }
+
+  function handleLocalCandidate(candidate: RTCIceCandidateInit) {
+    console.log("[LOCAL] Received ICE candidate", candidate);
+    localPeerConnection.current?.addIceCandidate(
+      new RTCIceCandidate(candidate)
+    );
+  }
+
+  function handleRemoteCandidate(candidate: RTCIceCandidateInit) {
+    console.log("[REMOTE] Received ICE candidate", candidate);
+    remotePeerConnection.current?.addIceCandidate(
+      new RTCIceCandidate(candidate)
+    );
+  }
+
+  async function startCasting() {
+    try {
+      // Step 1: Set up media stream
+      const stream = await setupMediaStream();
+
+      // Step 2: Set up WebSocket connection
+      await setupWebSocket();
+
+      wsClient.current?.onMessage((event) => {
+        const message = JSON.parse(event.data);
+        switch (message.type) {
+          case "offer":
+            handleOffer(message.payload);
+            break;
+          case "answer":
+            handleAnswer(message.payload);
+            break;
+          case "candidate":
+            if (message.target === "local") {
+              handleLocalCandidate(message.payload);
+            } else if (message.target === "remote") {
+              handleRemoteCandidate(message.payload);
+            } else {
+              console.error();
+            }
+            break;
+        }
+      });
+
+      // Step 3: Set up peer connections
+      setupLocalPeerConnection(stream, wsClient.current);
+      setupRemotePeerConnection(wsClient.current);
+    } catch (error) {
+      console.error("Error in startCasting:", error);
     }
   }
 
